@@ -14,6 +14,8 @@ UNREAD_COUNT_CHANGED = 12
 TYPING_USER = 61
 TYPING_CHAT = 62
 TYPING_VOICE = 65
+REACTION = 601
+REACTIONS_COUNTER = 602
 
 NAMES = {
     NEW_MESSAGE: "new_message",
@@ -28,6 +30,8 @@ NAMES = {
     TYPING_USER: "typing_user",
     TYPING_CHAT: "typing_chat",
     TYPING_VOICE: "typing_voice",
+    REACTION: "reaction",
+    REACTIONS_COUNTER: "reactions_counter",
 }
 
 

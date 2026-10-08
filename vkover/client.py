@@ -36,6 +36,7 @@ class Client:
         self._refresh_lock = False
         self._refresh_failures = 0
         self.max_refresh_failures = 3
+        self._floodwait_sleep = 5.0
         self._http = httpx.Client(
             timeout=timeout,
             headers={
@@ -92,12 +93,16 @@ class Client:
             if code == 6 and attempt < 3:
                 time.sleep(1.5 * (attempt + 1))
                 continue
+            if code == 9 and attempt < 3 and self._floodwait_sleep:
+                time.sleep(self._floodwait_sleep)
+                self._floodwait_sleep = min(self._floodwait_sleep * 2, 60)
+                continue
             if code in AUTH_CODES or (code == 5 and FATAL_AUTH in msg):
                 if self._try_refresh():
                     continue
                 raise TokenExpired(5, msg)
             raise VKError(code, msg, err.get("request_params"))
-        raise VKError(code, msg)
+        raise VKError(code, msg, None)
 
     def execute(self, code: str) -> Any:
         """Run execute code on the server (batch API calls)."""

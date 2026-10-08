@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vkover"
-version = "0.1.0"
+version = "0.2.7"
 description = "VKover - VK user-bot library on web tokens (api.vk.ru, Long Poll v3)"
 readme = "README.md"
 license = "AGPL-3.0-or-later"

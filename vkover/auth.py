@@ -57,6 +57,9 @@ class TokenRefresher:
     def hook(self):
         def _h(client):
             try:
+                cached = self.read_cached()
+                if cached and cached != client.token:
+                    return cached
                 return self.refresh()
             except Exception:
                 return None

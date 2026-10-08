@@ -174,3 +174,35 @@ def test_edit_message_request():
     _, data = vk.client._http.requests[0]
     assert data["message_id"] == 55
     assert data["message"] == "new text"
+
+
+def test_event_message_parsing():
+    from vkover.models import Event
+    raw = [4, 6748, 3, 1129275309, 1791451778, "seq-probe", {"title": " ... "}, {}, 1659530940]
+    ev = Event(code=raw[0], fields=list(raw[1:]))
+    m = ev.message
+    assert m.id == 6748
+    assert m.peer_id == 1129275309
+    assert m.date == 1791451778
+    assert m.text == "seq-probe"
+    assert m.from_id == 1659530940
+
+
+def test_event_out_flag():
+    from vkover.models import Event
+    ev = Event(code=4, fields=[6800, 3, 1129275309, 1791453475, "text", {}, {}, 540394835])
+    assert ev.message.out is True
+    ev2 = Event(code=4, fields=[6800, 1, 1129275309, 1791453475, "text", {}, {}, 540394835])
+    assert ev2.message.out is False
+
+
+def test_html_formatting():
+    from vkover.formatting import html_to_format_data
+    text, fd = html_to_format_data("<b>bold</b> plain")
+    assert text == "bold plain"
+    assert fd["items"][0] == {"offset": 0, "length": 4, "type": "bold", "url": ""}
+    text, fd = html_to_format_data('<b><a href="https://x.com">bl</a></b>')
+    types = sorted(i["type"] for i in fd["items"])
+    assert types == ["bold", "url"]
+    text, fd = html_to_format_data("no tags")
+    assert fd is None

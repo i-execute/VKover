@@ -63,10 +63,35 @@ class Conversation:
 
 
 @dataclass
+class ReactionUpdate:
+    peer_id: int
+    cmid: int
+    reaction_id: int
+    user_id: int
+    removed: bool = False
+    old_reaction_id: int = 0
+    raw: list = field(default_factory=list)
+
+
+@dataclass
 class Event:
     code: int
     fields: list[Any]
     ts: int = 0
+
+    @property
+    def message(self) -> "Message":
+        """Message object for code 4/5 events (fields exclude the code)."""
+        f = self.fields
+        return Message(
+            id=f[0],
+            peer_id=f[2] if len(f) > 2 else 0,
+            from_id=(f[-1] if isinstance(f[-1], int) else 0),
+            date=(f[3] if len(f) > 3 and isinstance(f[3], int) else 0),
+            out=bool(f[1] & 2) if len(f) > 1 and isinstance(f[1], int) else False,
+            text=(f[4] if len(f) > 4 and isinstance(f[4], str) else ""),
+            raw={"code": self.code, "fields": f},
+        )
 
     @property
     def is_new_message(self) -> bool:
@@ -83,3 +108,22 @@ class Event:
     @property
     def is_typing(self) -> bool:
         return self.code in (61, 65)
+
+    @property
+    def reaction(self) -> ReactionUpdate | None:
+        """Reaction event (code 601) — set, changed or removed."""
+        if self.code != 601 or len(self.fields) < 6:
+            return None
+        f = self.fields
+        etype = f[0]
+        removed = etype in (2, 3)
+        old = f[10] if (etype == 2 and len(f) > 10) else 0
+        return ReactionUpdate(
+            peer_id=f[1], cmid=f[2], reaction_id=f[6] if len(f) > 6 else f[3],
+            user_id=f[9] if len(f) > 9 else 0,
+            removed=removed, old_reaction_id=old, raw=f,
+        )
+
+    @property
+    def is_reaction(self) -> bool:
+        return self.code == 601
