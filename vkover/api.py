@@ -315,6 +315,56 @@ class VKover:
         open(out_path, "wb").write(r.content)
         return out_path
 
+    def pin_message_request(self, peer_id: int, message_id: int) -> dict:
+        """Pin a message; returns pinned message object."""
+        return self.client.call("messages.pin", peer_id=peer_id,
+                                message_id=message_id)
+
+    def unpin_message_request(self, peer_id: int,
+                              conversation_message_id: int) -> bool:
+        """Unpin a message; True on success."""
+        return bool(self.client.call(
+            "messages.unpin", peer_id=peer_id,
+            conversation_message_id=conversation_message_id,
+        ))
+
+    def create_group_request(self, title: str, photo_path: str = None) -> int:
+        """Create a group chat; returns peer_id (2000000000 + chat_id).
+
+        photo_path: optional avatar image (jpg/png) uploaded via
+        photos.getChatUploadServer → messages.setChatPhoto."""
+        chat = self.client.call("messages.createChat", title=title)
+        chat_id = chat["chat_id"] if isinstance(chat, dict) else chat
+        peer_id = 2000000000 + chat_id
+        if photo_path:
+            self.set_chat_photo_request(chat_id, photo_path)
+        return peer_id
+
+    def set_chat_photo_request(self, chat_id: int, photo_path: str) -> bool:
+        """Set a chat avatar; True on success."""
+        import httpx as _hx
+        r = self.client.call("photos.getChatUploadServer",
+                             chat_id=chat_id, crop_x=0, crop_y=0,
+                             crop_width=1000, crop_height=1000)
+        with open(photo_path, "rb") as f:
+            data = f.read()
+        resp = _hx.post(r["upload_url"],
+                        files={"photo": (photo_path.rsplit("/", 1)[-1], data,
+                                         "image/jpeg")},
+                        timeout=90, follow_redirects=True)
+        up = resp.json()
+        file = up.get("response", up.get("file", up))
+        res = self.client.call("messages.setChatPhoto", chat_id=chat_id,
+                               file=file)
+        return bool(res)
+
+    def get_chat_request(self, peer_id: int) -> dict:
+        """Get chat info: {title, photo_50/100/200, members_count, admin_id,
+        users, is_default_photo}."""
+        r = self.client.call("messages.getConversationsById",
+                             peer_ids=peer_id, extended=1)
+        return r["items"][0].get("chat_settings", {})
+
     def upload_photo_request(self, peer_id: int, path: str,
                              caption: str = "") -> str:
         """Upload a photo; returns the photo<owner>_<id> attachment string."""
