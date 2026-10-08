@@ -5,6 +5,7 @@ from .client import Client, TokenExpired
 from .longpoll import LongPoll
 from .models import Conversation, Message
 from .handlers import Dispatcher, wrap
+from .calls import CallsCache
 
 
 class VKover:
@@ -35,6 +36,10 @@ class VKover:
         if self._me is None:
             self._me = self.client.call("users.get")[0]
         return self._me
+
+    def longpoll(self) -> LongPoll:
+        """Fresh Long Poll session bound to this client."""
+        return LongPoll(self.client)
 
     def on(self, event_cls):
         """Decorator: register a typed event handler."""
@@ -187,6 +192,27 @@ class VKover:
         if up_to:
             p["start_message_id"] = up_to
         return self.client.call("messages.markAsRead", **p)
+
+    def create_web_call_request(self, group_id: int | None = None) -> dict:
+        """Create a VK call; returns call_id, join_link, short_credentials."""
+        p = {}
+        if group_id:
+            p["group_id"] = group_id
+        return self.client.call("calls.start", **p)
+
+    start_call_request = create_web_call_request
+
+    def finish_web_call_request(self, call_id: str) -> bool:
+        """Force-finish a VK call."""
+        return bool(self.client.call("calls.forceFinish", call_id=call_id))
+
+    finish_call_request = finish_web_call_request
+
+    def calls(self, db=None) -> "CallsCache":
+        """Local cache of active calls (no API list endpoint exists)."""
+        cache = CallsCache(self, db)
+        cache.load()
+        return cache
 
     def users(self, ids: list[int]) -> list[dict]:
         """Fetch user profiles."""
