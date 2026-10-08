@@ -1,7 +1,7 @@
 import time
 
 from .auth import TokenRefresher
-from .client import Client
+from .client import Client, TokenExpired
 from .longpoll import LongPoll
 from .models import Conversation, Message
 from .handlers import Dispatcher, wrap
@@ -45,13 +45,36 @@ class VKover:
         return self.dispatcher.on_raw(fn)
 
     def run(self):
-        """Listen to Long Poll forever, dispatch every update."""
-        self._lp = LongPoll(self.client)
-        try:
-            for u in self._lp.events():
-                self.dispatcher.dispatch(u)
-        finally:
-            self.close()
+        """Listen to Long Poll forever; auto-refreshes token on expiry."""
+        while True:
+            self._lp = LongPoll(self.client)
+            try:
+                for u in self._lp.events():
+                    self.dispatcher.dispatch(u)
+            except TokenExpired:
+                if not self.refresher:
+                    self.close()
+                    raise
+                tok = None
+                try:
+                    tok = self.refresher.refresh()
+                except Exception:
+                    tok = None
+                if not tok:
+                    self.close()
+                    raise
+                self.client.token = tok
+                self.client._refresh_failures = 0
+                continue
+            finally:
+                if self._lp:
+                    try:
+                        self._lp.close()
+                    except Exception:
+                        pass
+                self._lp = None
+            break
+        self.close()
 
     def close(self):
         """Close HTTP sessions."""

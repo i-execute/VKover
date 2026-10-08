@@ -30,6 +30,9 @@ def make_vk(responses):
     from vkover.client import Client
     vk.client = Client.__new__(Client)
     vk.client._http = FakeHTTP(responses)
+    vk.client._refresh_lock = False
+    vk.client._refresh_failures = 0
+    vk.client.max_refresh_failures = 3
     vk.client.token = "tok"
     vk.client.v = "5.199"
     vk.client.delay = 0

@@ -4,6 +4,7 @@ from typing import Any
 import httpx
 
 FATAL_AUTH = "access_token has expired"
+AUTH_CODES = (5, 1110)
 
 
 class VKError(Exception):
@@ -32,6 +33,9 @@ class Client:
         self.on_token_expired = on_token_expired
         self.calls = 0
         self._last = 0.0
+        self._refresh_lock = False
+        self._refresh_failures = 0
+        self.max_refresh_failures = 3
         self._http = httpx.Client(
             timeout=timeout,
             headers={
@@ -46,8 +50,28 @@ class Client:
         """Close the underlying HTTP session."""
         self._http.close()
 
+    def _try_refresh(self) -> bool:
+        """Refresh token via hook; resets failures on success."""
+        if not self.on_token_expired or self._refresh_lock:
+            return False
+        if self._refresh_failures >= self.max_refresh_failures:
+            return False
+        self._refresh_lock = True
+        try:
+            new_token = self.on_token_expired(self)
+        except Exception:
+            new_token = None
+        finally:
+            self._refresh_lock = False
+        if new_token:
+            self.token = new_token
+            self._refresh_failures = 0
+            return True
+        self._refresh_failures += 1
+        return False
+
     def call(self, method: str, **params) -> dict:
-        """Call a VK API method; auto-retries error 6, raises VKError."""
+        """Call a VK API method; retries error 6, auto-refreshes token on auth failure."""
         code, msg = 0, ""
         for attempt in range(4):
             wait = self.delay - (time.time() - self._last)
@@ -68,11 +92,9 @@ class Client:
             if code == 6 and attempt < 3:
                 time.sleep(1.5 * (attempt + 1))
                 continue
-            if code == 5 and FATAL_AUTH in msg:
-                if self.on_token_expired:
-                    self.token = self.on_token_expired(self)
-                    if self.token:
-                        continue
+            if code in AUTH_CODES or (code == 5 and FATAL_AUTH in msg):
+                if self._try_refresh():
+                    continue
                 raise TokenExpired(5, msg)
             raise VKError(code, msg, err.get("request_params"))
         raise VKError(code, msg)

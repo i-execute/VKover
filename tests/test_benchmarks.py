@@ -5,6 +5,13 @@ from vkover.handlers import wrap
 from vkover.models import Message
 
 
+@pytest.fixture
+def client():
+    c = Client("tok", delay=0)
+    c._http = FakeHTTP()
+    return c
+
+
 class FakeHTTP:
     def post(self, url, data=None):
         class R:
@@ -12,13 +19,6 @@ class FakeHTTP:
             def json():
                 return {"response": 1}
         return R()
-
-
-@pytest.fixture
-def client():
-    c = Client("tok", delay=0)
-    c._http = FakeHTTP()
-    return c
 
 
 def test_bench_call(benchmark, client):
